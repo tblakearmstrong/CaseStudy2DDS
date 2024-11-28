@@ -1,4 +1,4 @@
-ID,fixed acidity,volatile acidity,citric acid,residual sugar,chlorides,free sulfur dioxide,total sulfur dioxide,density,pH,sulphates,alcohol
+ID,fixed_acidity,volatile_acidity,citric_acid,residual_sugar,chlorides,free_sulfur_dioxide,total_sulfur_dioxide,density,pH,sulphates,alcohol
 5464,6.6,0.84,0.03,2.3,0.059,32,48,0.9952,3.52,0.56,12.3
 5465,7.2,0.54,0.27,2.6,0.084,12,78,0.9964,3.39,0.71,11
 5466,8.9,0.565,0.34,3,0.093,16,112,0.9998,3.38,0.61,9.5
