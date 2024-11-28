@@ -1,0 +1,320 @@
+library(shiny)
+library(plotly)
+library(ggplot2)
+library(DT)
+
+
+wine_quality <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Train.csv", header=TRUE)
+wine_type_location <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Types%20And%20Locations.csv", header = TRUE)
+
+wine_data <- merge(wine_quality, wine_type_location, by = "ID")
+
+# Define UI
+ui <- fluidPage(
+  
+  # App title
+  titlePanel("Wine Quality Data with Tabs"),
+  
+  # Sidebar layout with input and output definitions
+  sidebarLayout(
+    sidebarPanel(
+      # Input: Choice Selection of Wine Type
+      selectInput(
+        inputId = "type", label = "Wine Type:",
+        choices = list("All Data" = "all", "Red" = "red", "White"="white"),
+        selected = "all"
+      ),
+      
+      # Chart 1 Section Header ----
+      h4("Chart 1: Boxplot/Histogram Settings"),
+
+      
+      # Input: Choice Selection of Data----
+      selectInput(
+        inputId = "data",label = "Data to Chart:",
+        choices = list("Quality" = "quality", "Fixed Acidity" = "fixed_acidity", "Volatile Acidity" = "volatile_acidity", "Citric Acid" = "citric_acid", "Residual Sugar" = "residual_sugar", "Chlorides" = "chlorides", "Free Sulfur Dioxide" = "free_sulfur_dioxide", "Total Sulfur Dioxide" = "total_sulfur_dioxide", "Density" = "density", "pH"= "pH", "Sulphates" = "sulphates", "Alcohol" = "alcohol"),
+        selected = "alcohol"
+      ),
+      # Input: Choice Selection of Chart Type----
+      selectInput(
+        inputId = "chart_type",label = "Chart 1 Type:",
+        choices = list("Boxplot" = "box", "Histogram" = "histogram"),
+        selected = "histogram"
+      ),
+      
+      # Input: Number of Bins for Histogram
+      sliderInput(
+        inputId = "bins", label = "Number of Bins:",
+        min = 1, max = 10, value = 5
+      ),
+      
+      # Chart 2 Section Header ----
+      h4("Chart 2: Scatter Plot Settings"),
+      selectInput(
+        inputId = "x_var", label = "X Variable:", 
+        choices = list("Quality" = "quality", "Fixed Acidity" = "fixed_acidity", "Volatile Acidity" = "volatile_acidity", "Citric Acid" = "citric_acid", "Residual Sugar" = "residual_sugar", "Chlorides" = "chlorides", "Free Sulfur Dioxide" = "free_sulfur_dioxide", "Total Sulfur Dioxide" = "total_sulfur_dioxide", "Density" = "density", "pH"= "pH", "Sulphates" = "sulphates", "Alcohol" = "alcohol"),
+        selected = "alcohol"
+      ),
+      
+      
+      selectInput(
+        inputId = "y_var", label = "Y Variable:", 
+        choices = list("Quality" = "quality", "Fixed Acidity" = "fixed_acidity", "Volatile Acidity" = "volatile_acidity", "Citric Acid" = "citric_acid", "Residual Sugar" = "residual_sugar", "Chlorides" = "chlorides", "Free Sulfur Dioxide" = "free_sulfur_dioxide", "Total Sulfur Dioxide" = "total_sulfur_dioxide", "Density" = "density", "pH"= "pH", "Sulphates" = "sulphates", "Alcohol" = "alcohol"),
+        selected = "alcohol"    
+      ),     
+      
+      radioButtons("show_lm", "Trendline (On/Off):",
+                   c("On" = "on",
+                     "Off" = "off")),
+    ),
+    
+    # Main panel for displaying outputs
+    mainPanel(
+      tabsetPanel(
+        # Tab 1: All Wines
+        tabPanel("All Wines", 
+                 h3("Wine Data: All Wines"),
+                 DTOutput("all_wines_table"),
+                 plotlyOutput("all_wines_chart"),
+                 plotlyOutput("all_wines_scatter")),
+        
+        # Tab 2: Texas Wines
+        tabPanel("Texas Wines", 
+                 h3("Wine Data: Texas Wines"),
+                 DTOutput("texas_wines_table"),
+                 plotlyOutput("texas_wines_chart"),
+                 plotlyOutput("texas_wines_scatter")),
+        
+        # Tab 3: California Wines
+        tabPanel("California Wines", 
+                 h3("Wine Data: California Wines"),
+                 DTOutput("california_wines_table"),
+                 plotlyOutput("california_wines_chart"),
+                 plotlyOutput("california_wines_scatter"))
+      )
+    )
+  )
+)
+
+# Define server logic
+server <- function(input, output) {
+  
+  # Reactive Filtered Data based on Type of Wine
+  filtered_data <- reactive({
+    if (input$type == "all") {
+      return(wine_data) # Return all data
+    } else {
+      return(subset(wine_data, type == input$type)) # Filter by selected type
+    }
+  })
+  
+  # Render All Wines Table
+  output$all_wines_table <- renderDT({
+    colnames(data)
+    datatable(filtered_data(), options = list(scrollX = TRUE))
+  })
+  
+  # Render Texas Wines Table
+  output$texas_wines_table <- renderDT({
+    colnames <- c("ID","Fixed Acidity", "Volatile Acidity", "Citric Acid", "Residual Sugar", "Chlorides", "Free Sulphur Dioxide", "Total Sulfur Dioxide", "Density","pH", "Sulphates","Alcohol", "Quality", "Type", "Location")
+    datatable(subset(filtered_data(), location == "Texas"), options = list(scrollX = TRUE))
+  })
+  
+  # Render California Wines Table
+  output$california_wines_table <- renderDT({
+    datatable(subset(filtered_data(), location == "California"), options = list(scrollX = TRUE))
+  })
+  
+  # Render Chart for All Wines (Boxplot/Histogram)
+  output$all_wines_chart <- renderPlotly({
+    plot_column <- input$data
+  
+    # Generate the selected chart type (Boxplot or Histogram)
+    if (input$chart_type == "histogram") {
+      p <- ggplot(filtered_data(), aes_string(x = plot_column)) +
+        geom_histogram(bins = input$bins, fill = "skyblue", color = "black", alpha = 0.7) +
+        labs(title = paste("Histogram of", plot_column, "(All Wines)"), x = plot_column, y = "Frequency")
+    } else {
+      p <- ggplot(filtered_data(), aes_string(y = plot_column)) +
+        geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
+        labs(title = paste("Boxplot of", plot_column, "(All Wines)"), y = plot_column)
+    }
+    ggplotly(p)
+  })
+  
+  # Render Chart for Texas Wines (Boxplot/Histogram)
+  output$texas_wines_chart <- renderPlotly({
+    plot_column <- input$data
+    texas_data <- subset(filtered_data(), location == "Texas")
+    
+    if (input$chart_type == "histogram") {
+      p <- ggplot(texas_data, aes_string(x = plot_column)) +
+        geom_histogram(bins = input$bins, fill = "skyblue", color = "black", alpha = 0.7) +
+        labs(title = paste("Histogram of", plot_column, "(Texas Wines)"), x = plot_column, y = "Frequency")
+    } else {
+      p <- ggplot(texas_data, aes_string(y = plot_column)) +
+        geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
+        labs(title = paste("Boxplot of", plot_column, "(Texas Wines)"), y = plot_column)
+    }
+    ggplotly(p)
+  })
+  
+  # Render Chart for California Wines (Boxplot/Histogram)
+  output$california_wines_chart <- renderPlotly({
+    plot_column <- input$data
+    california_data <- subset(filtered_data(), location == "California")
+    
+    if (input$chart_type == "histogram") {
+      p <- ggplot(california_data, aes_string(x = plot_column)) +
+        geom_histogram(bins = input$bins, fill = "skyblue", color = "black", alpha = 0.7) +
+        labs(title = paste("Histogram of", plot_column, "(California Wines)"), x = plot_column, y = "Frequency")
+    } else {
+      p <- ggplot(california_data, aes_string(y = plot_column)) +
+        geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
+        labs(title = paste("Boxplot of", plot_column, "(California Wines)"), y = plot_column)
+    }
+    ggplotly(p)
+  })
+  
+  # Render Scatter Plot for All Wines
+  output$all_wines_scatter <- renderPlotly({
+    # Filter out rows with NA values in x_var and y_var
+    data_clean <- filtered_data() %>%
+      filter(!is.na(.data[[input$x_var]]) & !is.na(.data[[input$y_var]]))
+    
+    p <- ggplot(data_clean, aes_string(x = input$x_var, y = input$y_var)) +
+      geom_point(aes(color = type), size = 3) +
+      labs(title = paste("Scatter Plot of", input$y_var, "vs", input$x_var, "(All Wines)"), 
+           x = input$x_var, y = input$y_var)
+    
+    # Add Trendlines Per Group (type) and Fit Metrics
+    if (input$show_lm == "on") {
+      p <- p + 
+        geom_smooth(method = "lm", aes(group = type), se = FALSE, color = "red")
+    }
+    
+    # Fit linear models for each group and extract fit metrics
+    #lm_fits <- data_clean %>%
+    #  group_by(type) %>%
+    #  do({
+    #    lm_model <- lm(as.formula(paste(input$y_var, "~", input$x_var)), data = .)
+    #    summary_lm <- summary(lm_model)
+    #    data.frame(
+    #      group = unique(.$type),
+    #      slope = coef(lm_model)[2],
+    #      intercept = coef(lm_model)[1],
+    #      r_squared = summary_lm$r.squared
+    #    )
+    #  })
+    #
+    ## Add text annotations with fit metrics to the plot
+    #for (i in 1:nrow(lm_fits)) {
+    #  p <- p + annotate("text", 
+    #                    x = 1, y = max(data_clean[[input$y_var]]) * 0.95 - i * 0.1, 
+    #                    label = paste(
+    #                      lm_fits$group[i], 
+    #                      "\nSlope: ", round(lm_fits$slope[i], 2), 
+    #                      "\nIntercept: ", round(lm_fits$intercept[i], 2),
+    #                      "\nR-squared: ", round(lm_fits$r_squared[i], 2)),
+    #                    color = "black", size = 3, hjust = 0)
+    #}
+    
+    ggplotly(p)
+  })
+  
+  # Render Scatter Plot for Texas Wines
+  output$texas_wines_scatter <- renderPlotly({
+    # Filter Texas data and remove rows with NA in x_var or y_var
+    texas_data <- subset(filtered_data(), location == "Texas") %>%
+      filter(!is.na(.data[[input$x_var]]) & !is.na(.data[[input$y_var]]))
+    
+    p <- ggplot(texas_data, aes_string(x = input$x_var, y = input$y_var)) +
+      geom_point(aes(color = type), size = 3) +
+      labs(title = paste("Scatter Plot of", input$y_var, "vs", input$x_var, "(Texas Wines)"),
+           x = input$x_var, y = input$y_var)
+    
+    # Add Trendlines Per Group (type) and Fit Metrics
+    if (input$show_lm == "on") {
+      p <- p + 
+        geom_smooth(method = "lm", aes(group = type), se = FALSE, color = "red")
+    }
+    
+    # Fit linear models for each group and extract fit metrics
+    #lm_fits <- texas_data %>%
+    #  group_by(type) %>%
+    #  do({
+    #    lm_model <- lm(as.formula(paste(input$y_var, "~", input$x_var)), data = .)
+    #    summary_lm <- summary(lm_model)
+    #    data.frame(
+    #      group = unique(.$type),
+    #      slope = coef(lm_model)[2],
+    #      intercept = coef(lm_model)[1],
+    #      r_squared = summary_lm$r.squared
+    #    )
+    #  })
+    #
+    ## Add text annotations with fit metrics to the plot
+    #for (i in 1:nrow(lm_fits)) {
+    #  p <- p + annotate("text", 
+    #                    x = 1, y = max(texas_data[[input$y_var]]) * 0.95 - i * 0.1, 
+    #                    label = paste(
+    #                      lm_fits$group[i], 
+    #                      "\nSlope: ", round(lm_fits$slope[i], 2), 
+    #                      "\nIntercept: ", round(lm_fits$intercept[i], 2),
+    #                      "\nR-squared: ", round(lm_fits$r_squared[i], 2)),
+    #                    color = "black", size = 3, hjust = 0)
+    #}
+    
+    ggplotly(p)
+  })
+  
+  # Render Scatter Plot for California Wines
+  output$california_wines_scatter <- renderPlotly({
+    # Filter California data and remove rows with NA in x_var or y_var
+    california_data <- subset(filtered_data(), location == "California") %>%
+      filter(!is.na(.data[[input$x_var]]) & !is.na(.data[[input$y_var]]))
+    
+    p <- ggplot(california_data, aes_string(x = input$x_var, y = input$y_var)) +
+      geom_point(aes(color = type), size = 3) +
+      labs(title = paste("Scatter Plot of", input$y_var, "vs", input$x_var, "(California Wines)"),
+           x = input$x_var, y = input$y_var)
+    
+    # Add Trendlines Per Group (type) and Fit Metrics
+    if (input$show_lm == "on") {
+      p <- p + 
+        geom_smooth(method = "lm", aes(group = type), se = FALSE, color = "red")
+    }
+    
+    # Fit linear models for each group and extract fit metrics
+    #lm_fits <- california_data %>%
+    #  group_by(type) %>%
+    #  do({
+    #    lm_model <- lm(as.formula(paste(input$y_var, "~", input$x_var)), data = .)
+    #    summary_lm <- summary(lm_model)
+    #    data.frame(
+    #      group = unique(.$type),
+    #      slope = coef(lm_model)[2],
+    #      intercept = coef(lm_model)[1],
+    #      r_squared = summary_lm$r.squared
+    #    )
+    #  })
+    #
+    ## Add text annotations with fit metrics to the plot
+    #for (i in 1:nrow(lm_fits)) {
+    #  p <- p + annotate("text", 
+    #                    x = 1, y = max(california_data[[input$y_var]]) * 0.95 - i * 0.1, 
+    #                    label = paste(
+    #                      lm_fits$group[i], 
+    #                      "\nSlope: ", round(lm_fits$slope[i], 2), 
+    #                      "\nIntercept: ", round(lm_fits$intercept[i], 2),
+    #                      "\nR-squared: ", round(lm_fits$r_squared[i], 2)),
+    #                    color = "black", size = 3, hjust = 0)
+    #}
+    
+    ggplotly(p)
+  })
+  
+}
+
+# Run the app
+shinyApp(ui, server)
