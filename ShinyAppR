@@ -111,18 +111,20 @@ server <- function(input, output) {
   # Render All Wines Table
   output$all_wines_table <- renderDT({
     colnames(data)
-    datatable(filtered_data(), options = list(scrollX = TRUE))
+    datatable(filtered_data(), options = list(scrollX = TRUE),
+              colnames = c("ID", "Fixed Acidity", "Volatile Acidity", "Citric Acid", "Residual Sugar", "Chlorides", "Free Sulphur Dioxide", "Total Sulfur Dioxide", "Density", "pH", "Sulphates", "Alcohol", "Quality", "Type", "Location"))
   })
   
   # Render Texas Wines Table
   output$texas_wines_table <- renderDT({
-    colnames <- c("ID","Fixed Acidity", "Volatile Acidity", "Citric Acid", "Residual Sugar", "Chlorides", "Free Sulphur Dioxide", "Total Sulfur Dioxide", "Density","pH", "Sulphates","Alcohol", "Quality", "Type", "Location")
-    datatable(subset(filtered_data(), location == "Texas"), options = list(scrollX = TRUE))
+    datatable(subset(filtered_data(), location == "Texas"), options = list(scrollX = TRUE), 
+              colnames = c("ID", "Fixed Acidity", "Volatile Acidity", "Citric Acid", "Residual Sugar", "Chlorides", "Free Sulphur Dioxide", "Total Sulfur Dioxide", "Density", "pH", "Sulphates", "Alcohol", "Quality", "Type", "Location"))
   })
   
   # Render California Wines Table
   output$california_wines_table <- renderDT({
-    datatable(subset(filtered_data(), location == "California"), options = list(scrollX = TRUE))
+    datatable(subset(filtered_data(), location == "California"), options = list(scrollX = TRUE),
+              colnames = c("ID", "Fixed Acidity", "Volatile Acidity", "Citric Acid", "Residual Sugar", "Chlorides", "Free Sulphur Dioxide", "Total Sulfur Dioxide", "Density", "pH", "Sulphates", "Alcohol", "Quality", "Type", "Location"))
   })
   
   # Render Chart for All Wines (Boxplot/Histogram)
