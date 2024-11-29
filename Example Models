@@ -1,0 +1,99 @@
+
+###Naive Bayes-----------------------------------------------------------------------------------------
+  
+  
+  # Load necessary libraries
+  library(e1071)  # Naive Bayes model
+  library(tidyverse)
+  
+  # Convert 'quality' into a categorical variable (Low, Medium, High)
+  wine_train$quality_cat <- factor(
+    ifelse(wine_train$quality <= 4, "Low", 
+           ifelse(wine_train$quality <= 7, "Medium", "High"))
+  )
+  
+  # Split data into training and testing sets (80/20 split)
+  set.seed(123)
+  split <- 0.8
+  train_indices <- sample(seq(1, nrow(wine_train)), round(split * nrow(wine_train)))
+  wine_train_model <- wine_train[train_indices, ]
+  wine_test_model  <- wine_train[-train_indices, ]
+  
+  # Define the predictors (exclude the target variable 'quality')
+  predictors <- c("fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides", 
+                  "free_sulfur_dioxide", "total_sulfur_dioxide", "density", "pH", "sulphates")
+  
+  # Train Naive Bayes model
+  nb_model <- naiveBayes(quality_cat ~ fixed_acidity + volatile_acidity + citric_acid + residual_sugar + 
+                           chlorides + free_sulfur_dioxide + total_sulfur_dioxide + density + pH + sulphates, 
+                         data = wine_train_model)
+  
+  # Make predictions on the test set
+  nb_pred <- predict(nb_model, newdata = wine_test_model)
+  
+  # Evaluate accuracy (for classification)
+  accuracy <- mean(nb_pred == wine_test_model$quality_cat)
+  cat("Accuracy for Naive Bayes:", accuracy, "\n")
+  
+###Linear Regression---------------------------------------------------------------------
+  
+  # Load necessary libraries
+  library(forecast)
+  library(tidyverse)
+  library(stats)
+  
+  wine_train$quality <- as.integer(wine_train$quality)
+  
+  # Split data into training and testing sets (80/20 split)
+  set.seed(123)
+  split <- 0.8
+  train_indices = sample(seq(1, nrow(wine_train)), round(split * nrow(wine_train)))
+  wine_train_model <- wine_train[train_indices, ]
+  wine_test_model  <- wine_train[-train_indices, ]
+  
+  # Normalize the continuous predictors
+  predictors <- c("fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides", 
+                  "free_sulfur_dioxide", "total_sulfur_dioxide", "density", "pH", "sulphates")
+  
+  wine_train_model[predictors] <- scale(wine_train_model[predictors])
+  wine_test_model[predictors] <- scale(wine_test_model[predictors])
+  
+  # Function to calculate MAE
+  calculate_mae <- function(model, model_name, predictors, wine_test_model) {
+    # Make predictions on the test set
+    pred <- predict(model, newdata = wine_test_model)
+    
+    # Calculate MAE (Mean Absolute Error)
+    mae <- mean(abs(pred - wine_test_model$quality))
+    
+    # Return the model name and MAE
+    return(data.frame(model = model_name, mae = mae))
+  }
+  
+  # Initialize an empty data frame to store MAE results
+  mae_results <- data.frame(model = character(), mae = numeric())
+  
+  # Linear Regression Model
+  lm_model <- lm(quality ~ fixed_acidity + volatile_acidity + citric_acid + residual_sugar + chlorides + 
+                   free_sulfur_dioxide + total_sulfur_dioxide + density + pH + sulphates, 
+                 data = wine_train_model)
+  
+  # Calculate MAE for Linear Regression
+  lm_mae <- calculate_mae(lm_model, "Linear Regression", predictors, wine_test_model)
+  mae_results <- rbind(mae_results, lm_mae)
+  
+  # Quadratic Model (Adding squared terms)
+  quad_model <- lm(quality ~ (fixed_acidity + volatile_acidity + citric_acid + residual_sugar + chlorides + 
+                                free_sulfur_dioxide + total_sulfur_dioxide + density + pH + sulphates)^2, 
+                   data = wine_train_model)
+  
+  # Calculate MAE for Quadratic Model
+  quad_mae <- calculate_mae(quad_model, "Quadratic Model", predictors, wine_test_model)
+  mae_results <- rbind(mae_results, quad_mae)
+  
+  # View the MAE results for each model
+  print(mae_results)
+  
+  # Identify the model with the lowest MAE
+  best_model <- mae_results[which.min(mae_results$mae), ]
+  cat("Best model is:", best_model$model, "with MAE:", best_model$mae)
