@@ -1,0 +1,117 @@
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(naniar)
+library(caret)
+library(e1071)
+
+###-----------------------------------------------------------###LOAD AND CLEAN###-------------------------------------------------------------------###
+# Load the test dataset
+wine_test_raw <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Test%20Set.csv", header = TRUE)
+wine_test_raw$quality <- NA_integer_ #Add the column so we can rbind later to make a full dataset
+str(wine_test_raw)
+
+# Load the train dataset
+wine_train_raw <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Train.csv", header=TRUE)
+str(wine_train_raw)
+
+# rbind datasets to impute later
+wine_total_raw <- rbind(wine_train_raw, wine_test_raw)
+str(wine_total_raw)
+
+# Load the locations/type of all wines (with missing values, need to impute)
+wine_type_location <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Types%20And%20Locations.csv", header = TRUE)
+str(wine_type_location)
+
+
+# Look at missing values
+missing_type_location <- tibble(
+  missing_type = sum(wine_type_location$type==""),
+  missing_location = sum(wine_type_location$location==""))
+print(missing_type_location)
+
+
+# Fix the missing values in wine_type_location before merging with other datasets going from "" to NA
+wine_type_location <- wine_type_location %>% 
+  mutate(type=ifelse(type=="",NA,type))
+
+
+# Merge total raw dataset with the type and location
+wine_full_set <- merge(wine_total_raw, wine_type_location, by = "ID")
+str(wine_train)
+
+# Plot missing variables using naniar package
+gg_miss_var(wine_full_set)
+
+
+###-----------------------------------------------------###FIX MISSING "type" VALUES###---------------------------------------------------------------###
+# Impute missing wine types using the mice package
+library(minqa)
+library(mice)
+library(gridExtra)
+
+# Setting dataframe to impute 
+wine_type_impute <- wine_full_set %>% 
+  select(fixed_acidity, volatile_acidity, residual_sugar, chlorides, free_sulfur_dioxide, total_sulfur_dioxide, density, pH, sulphates, alcohol, type, location)
+str(wine_type_impute)
+
+####Try to rotate labels so that it is readable####
+md.pattern(wine_type_impute) # Matches 175 to what was calculated above...
+
+
+# Making sure type is a factor
+wine_type_impute$type <- as.factor(wine_type_impute$type)
+
+
+# Perform imputation using mice with logistic regression (logreg) for the 'type' column
+imputed_data <- mice(wine_type_impute, method = "logreg", m = 5)
+
+
+# Setup dataframe to be able to plot histogram by type
+mice_imputed <- data.frame(
+  original = wine_full_set$type,  # The original type column
+  imputed_logreg = complete(imputed_data, action = 1)$type  # First imputation (logreg)
+  )
+
+
+h1 <- ggplot(mice_imputed, aes(x = original)) +
+  geom_bar(fill = "#ad1538", color = "#000000", position = "identity") +
+  ggtitle("Original Distribution") +
+  theme_classic() +
+  scale_x_discrete(labels = c("Red", "White"))+
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5, color = "black")+
+  scale_y_continuous(limits = c(0, 5500))
+
+h2 <- ggplot(mice_imputed, aes(x = imputed_logreg)) +
+  geom_bar(fill = "#15ad4f", color = "#000000", position = "identity") +
+  ggtitle("Logistic Regression Imputed Distribution") +
+  theme_classic() +
+  scale_x_discrete(labels = c("Red", "White"))+
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5, color = "black") +
+  scale_y_continuous(limits = c(0, 5500))
+
+# Combine plots into a grid for easy comparison
+grid.arrange(h1, h2, nrow = 2)
+
+
+
+# Extract the first imputation (action = 1) for the 'type' column from the imputed data
+imputed_type <- complete(imputed_data, action = 1)$type
+
+# Add the imputed 'type' column back into the original wine_full_set dataframe
+wine_full_set$type_imputed <- imputed_type
+str(wine_full_set)
+
+# Make sure everything is populated that is supposed to be at this step...
+gg_miss_var(wine_full_set)
+
+# Split back out into the original train and test sets
+#Train stops at ID = 5463
+wine_train <- wine_full_set[1:5463,]
+str(wine_train)
+
+#Test starts at ID = 5464 until the end
+wine_test <- wine_full_set[5464:nrow(wine_full_set),]
+str(wine_test)
+
+#---------------------------------------------------------BUILD MODEL-----------------------------------------------------------------------------------
