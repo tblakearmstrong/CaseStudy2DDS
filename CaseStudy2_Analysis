@@ -255,3 +255,23 @@ cat("Best MAE for Red Wine:", best_model_red$MAE, "\n")
 
 cat("Best combination of variables for White Wine:", best_model_white$Variables, "\n")
 cat("Best MAE for White Wine:", best_model_white$MAE, "\n")
+
+#For white wine: density, pH, sulphates, location
+#For red wine: volatile_acidity, residual_sugar, chlorides, total_sulfur_dioxide, sulphates, location
+
+
+
+###-----------------------------------------Apply Train set model to Test Set-----------------------------------------------------------
+
+library(e1071)  
+library(caret)
+
+# White wine model
+white_wine_predictors <- c("density", "pH", "sulphates", "location")
+red_wine_predictors <- c("volatile_acidity", "residual_sugar", "chlorides", "total_sulfur_dioxide", "sulphates", "location")
+
+wine_train_red <- wine_train %>% filter(type_imputed == "red")
+wine_predict_red <- wine_quality_prediction %>% filter(type_imputed == "red")
+
+wine_train_white <- wine_train %>% filter(type_imputed == "white")
+wine_predict_white <- wine__quality_prediction %>% filter(type_imputed == "white")
