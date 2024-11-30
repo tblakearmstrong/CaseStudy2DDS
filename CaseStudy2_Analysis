@@ -112,7 +112,7 @@ wine_train <- wine_full_set[1:5463,]
 str(wine_train)
 
 #Test starts at ID = 5464 until the end
-wine__quality_prediction <- wine_full_set[5464:nrow(wine_full_set),]
+wine_quality_prediction <- wine_full_set[5464:nrow(wine_full_set),]
 str(wine_test)
 
 
