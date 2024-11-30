@@ -3,11 +3,71 @@ library(plotly)
 library(ggplot2)
 library(DT)
 
+###-----------------------------------------------------------###LOAD AND CLEAN###-------------------------------------------------------------------###
+# Load the test dataset
+wine_prediction_raw <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Test%20Set.csv", header = TRUE)
+wine_prediction_raw$quality <- NA_integer_ #Add the column so we can rbind later to make a full dataset
 
-wine_quality <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Train.csv", header=TRUE)
+# Load the train dataset
+wine_train_raw <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Train.csv", header=TRUE)
+
+# rbind datasets to impute later
+wine_total_raw <- rbind(wine_train_raw, wine_prediction_raw)
+
+# Load the locations/type of all wines (with missing values, need to impute)
 wine_type_location <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Types%20And%20Locations.csv", header = TRUE)
 
-wine_data <- merge(wine_quality, wine_type_location, by = "ID")
+# Fix the missing values in wine_type_location before merging with other datasets going from "" to NA
+wine_type_location <- wine_type_location %>% 
+  mutate(type=ifelse(type=="",NA,type))
+
+# Merge total raw dataset with the type and location
+wine_full_set <- merge(wine_total_raw, wine_type_location, by = "ID")
+
+###-----------------------------------------------------###FIX MISSING "type" VALUES###---------------------------------------------------------------###
+### Impute missing wine types using the mice package
+
+library(minqa)
+library(mice)
+library(gridExtra)
+
+# Setting dataframe to impute 
+wine_type_impute <- wine_full_set %>% 
+  select(fixed_acidity, volatile_acidity, residual_sugar, chlorides, free_sulfur_dioxide, total_sulfur_dioxide, density, pH, sulphates, alcohol, type, location)
+
+####Try to rotate labels so that it is readable####
+md.pattern(wine_type_impute) # Matches 175 to what was calculated above...
+
+
+# Making sure type is a factor
+wine_type_impute$type <- as.factor(wine_type_impute$type)
+
+
+# Perform imputation using mice with logistic regression (logreg) for the 'type' column
+imputed_data <- mice(wine_type_impute, method = "logreg", m = 5)
+
+
+# Setup dataframe to be able to plot histogram by type
+mice_imputed <- data.frame(
+  original = wine_full_set$type,  # The original type column
+  imputed_logreg = complete(imputed_data, action = 1)$type  # First imputation (logreg)
+)
+
+# Extract the first imputation (action = 1) for the 'type' column from the imputed data
+imputed_type <- complete(imputed_data, action = 1)$type
+
+# Add the imputed 'type' column back into the original wine_full_set dataframe
+wine_full_set$type_imputed <- imputed_type
+
+
+# Split back out into the original train and test sets
+#Train stops at ID = 5463
+wine_data <- wine_full_set[1:5463,]
+
+#wine_quality <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Train.csv", header=TRUE)
+#wine_type_location <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Types%20And%20Locations.csv", header = TRUE)
+#wine_data <- merge(wine_quality, wine_type_location, by = "ID")
+
 
 # Define UI
 ui <- fluidPage(
@@ -20,7 +80,7 @@ ui <- fluidPage(
     sidebarPanel(
       # Input: Choice Selection of Wine Type
       selectInput(
-        inputId = "type", label = "Wine Type:",
+        inputId = "type_imputed", label = "Wine Type:",
         choices = list("All Data" = "all", "Red" = "red", "White"="white"),
         selected = "all"
       ),
@@ -101,10 +161,10 @@ server <- function(input, output) {
   
   # Reactive Filtered Data based on Type of Wine
   filtered_data <- reactive({
-    if (input$type == "all") {
+    if (input$type_imputed == "all") {
       return(wine_data) # Return all data
     } else {
-      return(subset(wine_data, type == input$type)) # Filter by selected type
+      return(subset(wine_data, type == input$type_imputed)) # Filter by selected type
     }
   })
   
@@ -130,16 +190,20 @@ server <- function(input, output) {
   # Render Chart for All Wines (Boxplot/Histogram)
   output$all_wines_chart <- renderPlotly({
     plot_column <- input$data
-  
+
     # Generate the selected chart type (Boxplot or Histogram)
     if (input$chart_type == "histogram") {
       p <- ggplot(filtered_data(), aes_string(x = plot_column)) +
         geom_histogram(bins = input$bins, fill = "skyblue", color = "black", alpha = 0.7) +
         labs(title = paste("Histogram of", plot_column, "(All Wines)"), x = plot_column, y = "Frequency")
     } else {
-      p <- ggplot(filtered_data(), aes_string(y = plot_column)) +
+      p <- ggplot(filtered_data(), aes_string(x = "quality", y = plot_column)) +
         geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
-        labs(title = paste("Boxplot of", plot_column, "(All Wines)"), y = plot_column)
+        labs(title = paste("Boxplot of", plot_column, "(All Wines)"),x="Quality", y = plot_column) +
+        scale_x_discrete(labels = 1:10) +  # Show quality levels as x-axis labels
+        theme(
+          plot.margin = margin(10, 10, 10, 10)  
+        )
     }
     ggplotly(p)
   })
@@ -154,9 +218,13 @@ server <- function(input, output) {
         geom_histogram(bins = input$bins, fill = "skyblue", color = "black", alpha = 0.7) +
         labs(title = paste("Histogram of", plot_column, "(Texas Wines)"), x = plot_column, y = "Frequency")
     } else {
-      p <- ggplot(texas_data, aes_string(y = plot_column)) +
+      p <- ggplot(filtered_data(), aes_string(x = "quality", y = plot_column)) +
         geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
-        labs(title = paste("Boxplot of", plot_column, "(Texas Wines)"), y = plot_column)
+        labs(title = paste("Boxplot of", plot_column, "(All Wines)"),x="Quality", y = plot_column) +
+        scale_x_discrete(labels = 1:10) +  # Show quality levels as x-axis labels
+        theme(
+          plot.margin = margin(10, 10, 10, 10)  
+        )
     }
     ggplotly(p)
   })
@@ -171,9 +239,13 @@ server <- function(input, output) {
         geom_histogram(bins = input$bins, fill = "skyblue", color = "black", alpha = 0.7) +
         labs(title = paste("Histogram of", plot_column, "(California Wines)"), x = plot_column, y = "Frequency")
     } else {
-      p <- ggplot(california_data, aes_string(y = plot_column)) +
+      p <- ggplot(filtered_data(), aes_string(x = "quality", y = plot_column)) +
         geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
-        labs(title = paste("Boxplot of", plot_column, "(California Wines)"), y = plot_column)
+        labs(title = paste("Boxplot of", plot_column, "(All Wines)"),x="Quality", y = plot_column) +
+        scale_x_discrete(labels = 1:10) +  # Show quality levels as x-axis labels
+        theme(
+          plot.margin = margin(10, 10, 10, 10)  
+        )
     }
     ggplotly(p)
   })
@@ -185,14 +257,14 @@ server <- function(input, output) {
       filter(!is.na(.data[[input$x_var]]) & !is.na(.data[[input$y_var]]))
     
     p <- ggplot(data_clean, aes_string(x = input$x_var, y = input$y_var)) +
-      geom_point(aes(color = type), size = 3) +
+      geom_point(aes(color = type_imputed), size = 3) +
       labs(title = paste("Scatter Plot of", input$y_var, "vs", input$x_var, "(All Wines)"), 
            x = input$x_var, y = input$y_var)
     
     # Add Trendlines Per Group (type) and Fit Metrics
     if (input$show_lm == "on") {
       p <- p + 
-        geom_smooth(method = "lm", aes(group = type), se = FALSE, color = "red")
+        geom_smooth(method = "lm", aes(group = type_imputed, color = type_imputed), se = TRUE)
     }
     
     # Fit linear models for each group and extract fit metrics
@@ -231,14 +303,14 @@ server <- function(input, output) {
       filter(!is.na(.data[[input$x_var]]) & !is.na(.data[[input$y_var]]))
     
     p <- ggplot(texas_data, aes_string(x = input$x_var, y = input$y_var)) +
-      geom_point(aes(color = type), size = 3) +
+      geom_point(aes(color = type_imputed), size = 3) +
       labs(title = paste("Scatter Plot of", input$y_var, "vs", input$x_var, "(Texas Wines)"),
            x = input$x_var, y = input$y_var)
     
     # Add Trendlines Per Group (type) and Fit Metrics
     if (input$show_lm == "on") {
       p <- p + 
-        geom_smooth(method = "lm", aes(group = type), se = FALSE, color = "red")
+        geom_smooth(method = "lm", aes(group = type_imputed, color = type_imputed), se = TRUE)
     }
     
     # Fit linear models for each group and extract fit metrics
@@ -277,14 +349,14 @@ server <- function(input, output) {
       filter(!is.na(.data[[input$x_var]]) & !is.na(.data[[input$y_var]]))
     
     p <- ggplot(california_data, aes_string(x = input$x_var, y = input$y_var)) +
-      geom_point(aes(color = type), size = 3) +
+      geom_point(aes(color = type_imputed), size = 3) +
       labs(title = paste("Scatter Plot of", input$y_var, "vs", input$x_var, "(California Wines)"),
            x = input$x_var, y = input$y_var)
     
     # Add Trendlines Per Group (type) and Fit Metrics
     if (input$show_lm == "on") {
       p <- p + 
-        geom_smooth(method = "lm", aes(group = type), se = FALSE, color = "red")
+        geom_smooth(method = "lm", aes(group = type_imputed, color = type_imputed), se = TRUE)
     }
     
     # Fit linear models for each group and extract fit metrics
