@@ -7,16 +7,16 @@ library(e1071)
 
 ###-----------------------------------------------------------###LOAD AND CLEAN###-------------------------------------------------------------------###
 # Load the test dataset
-wine_test_raw <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Test%20Set.csv", header = TRUE)
-wine_test_raw$quality <- NA_integer_ #Add the column so we can rbind later to make a full dataset
-str(wine_test_raw)
+wine_prediction_raw <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Test%20Set.csv", header = TRUE)
+wine_prediction_raw$quality <- NA_integer_ #Add the column so we can rbind later to make a full dataset
+str(wine_prediction_raw)
 
 # Load the train dataset
 wine_train_raw <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Train.csv", header=TRUE)
 str(wine_train_raw)
 
 # rbind datasets to impute later
-wine_total_raw <- rbind(wine_train_raw, wine_test_raw)
+wine_total_raw <- rbind(wine_train_raw, wine_prediction_raw)
 str(wine_total_raw)
 
 # Load the locations/type of all wines (with missing values, need to impute)
@@ -45,7 +45,8 @@ gg_miss_var(wine_full_set)
 
 
 ###-----------------------------------------------------###FIX MISSING "type" VALUES###---------------------------------------------------------------###
-# Impute missing wine types using the mice package
+### Impute missing wine types using the mice package
+
 library(minqa)
 library(mice)
 library(gridExtra)
@@ -101,7 +102,7 @@ imputed_type <- complete(imputed_data, action = 1)$type
 # Add the imputed 'type' column back into the original wine_full_set dataframe
 wine_full_set$type_imputed <- imputed_type
 str(wine_full_set)
-
+summary(wine_full_set)
 # Make sure everything is populated that is supposed to be at this step...
 gg_miss_var(wine_full_set)
 
@@ -111,7 +112,66 @@ wine_train <- wine_full_set[1:5463,]
 str(wine_train)
 
 #Test starts at ID = 5464 until the end
-wine_test <- wine_full_set[5464:nrow(wine_full_set),]
+wine__quality_prediction <- wine_full_set[5464:nrow(wine_full_set),]
 str(wine_test)
 
-#---------------------------------------------------------BUILD MODEL-----------------------------------------------------------------------------------
+
+###-------------------------------------------------------BUILD MODEL--------------------------------------------------------------------------------###
+
+###-------------------------------Naive Bayes loop over every combination and find the lowest MAE---------------------------------------
+  
+# Load necessary libraries
+library(e1071)     
+library(tidyverse)
+library(caret)     
+library(purrr)     
+  
+# Split data into training and testing sets (80/20 split)
+set.seed(123)
+split <- 0.8
+train_indices = sample(seq(1, nrow(wine_train)), round(split * nrow(wine_train)))
+wine_train_model <- wine_train[train_indices, ]
+wine_test_model  <- wine_train[-train_indices, ]
+  
+  # Ensure 'quality' is numeric (for calculating MAE)
+wine_train_model$quality <- as.integer(wine_train_model$quality)
+  
+# Define predictors (list of columns to consider)
+predictors <- c("fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides", 
+                "free_sulfur_dioxide", "total_sulfur_dioxide", "density", "pH", "sulphates", "type_imputed", "location")
+  
+# Function to evaluate a Naive Bayes model and return MAE
+evaluate_nb_model <- function(predictors, wine_train_model, wine_test_model) {
+  # Create the formula dynamically for Naive Bayes model
+  formula <- as.formula(paste("quality ~", paste(predictors, collapse = " + ")))
+  
+  # Train the Naive Bayes model
+  nb_model <- naiveBayes(formula, data = wine_train_model)
+  
+  # Make predictions on the test set
+  nb_pred <- predict(nb_model, newdata = wine_test_model)
+  
+  # Convert predicted factors to numeric (for MAE calculation)
+  nb_pred_numeric <- as.numeric(as.character(nb_pred))
+  
+  # Calculate Mean Absolute Error (MAE)
+  mae <- mean(abs(nb_pred_numeric - wine_test_model$quality))  # MAE calculation
+  
+  return(mae)
+}
+  
+# Create all combinations of predictor variables
+all_combinations <- unlist(lapply(1:length(predictors), function(i) combn(predictors, i, simplify = FALSE)), recursive = FALSE)
+  
+# Loop over all combinations and evaluate each model
+results <- map_dfr(all_combinations, function(combo) {
+  mae <- evaluate_nb_model(combo, wine_train_model, wine_test_model)
+  data.frame(Variables = paste(combo, collapse = ", "), MAE = mae)
+})
+  
+# Find the combination with the lowest MAE
+best_model <- results[which.min(results$MAE), ]
+  
+# Print out the best combination and its MAE
+cat("Best combination of variables:", best_model$Variables, "\n")
+cat("Best MAE:", best_model$MAE, "\n")
