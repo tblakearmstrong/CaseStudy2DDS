@@ -200,10 +200,10 @@ server <- function(input, output) {
       p <- ggplot(filtered_data(), aes_string(x = "quality", y = plot_column)) +
         geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
         labs(title = paste("Boxplot of", plot_column, "(All Wines)"),x="Quality", y = plot_column) +
-        scale_x_discrete(labels = 1:10) +  # Show quality levels as x-axis labels
+        scale_x_continuous(limits = c(2.5, 9.5), breaks = seq(2, 10, by = 1)) +  # Show quality levels as x-axis labels
         theme(
-          plot.margin = margin(10, 10, 10, 10)  
-        )
+          plot.margin = margin(10, 10, 0, 10)  
+        ) 
     }
     ggplotly(p)
   })
@@ -221,9 +221,9 @@ server <- function(input, output) {
       p <- ggplot(filtered_data(), aes_string(x = "quality", y = plot_column)) +
         geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
         labs(title = paste("Boxplot of", plot_column, "(All Wines)"),x="Quality", y = plot_column) +
-        scale_x_discrete(labels = 1:10) +  # Show quality levels as x-axis labels
+        scale_x_continuous(limits = c(2.5, 9.5), breaks = seq(1, 10, by = 1)) +  # Show quality levels as x-axis labels
         theme(
-          plot.margin = margin(10, 10, 10, 10)  
+          plot.margin = margin(10, 10, 0, 10)  
         )
     }
     ggplotly(p)
@@ -239,12 +239,23 @@ server <- function(input, output) {
         geom_histogram(bins = input$bins, fill = "skyblue", color = "black", alpha = 0.7) +
         labs(title = paste("Histogram of", plot_column, "(California Wines)"), x = plot_column, y = "Frequency")
     } else {
-      p <- ggplot(filtered_data(), aes_string(x = "quality", y = plot_column)) +
+      # Calculate the medians by quality
+      median_data <- california_data %>%
+        group_by(quality) %>%
+        summarise(median_value = median(get(plot_column)), .groups = "drop")
+      
+      # Fit a linear model to the medians
+      lm_model <- lm(median_value ~ quality, data = median_data)
+      
+      # Plot boxplot and add the regression line on the medians
+      p <- ggplot(california_data, aes_string(x = "quality", y = plot_column)) +
         geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
-        labs(title = paste("Boxplot of", plot_column, "(All Wines)"),x="Quality", y = plot_column) +
-        scale_x_discrete(labels = 1:10) +  # Show quality levels as x-axis labels
+        geom_smooth(data = median_data, aes(x = quality, y = median_value), method = "lm", 
+                    color = "red", size = 1, se = FALSE) +  # Add regression line on the medians
+        labs(title = paste("Boxplot of", plot_column, "(All Wines)"), x = "Quality", y = plot_column) +
+        scale_x_continuous(limits = c(2.5, 9.5), breaks = seq(1, 10, by = 1)) +  # Adjust x-axis
         theme(
-          plot.margin = margin(10, 10, 10, 10)  
+          plot.margin = margin(10, 10, 0, 10)
         )
     }
     ggplotly(p)
@@ -266,33 +277,6 @@ server <- function(input, output) {
       p <- p + 
         geom_smooth(method = "lm", aes(group = type_imputed, color = type_imputed), se = TRUE)
     }
-    
-    # Fit linear models for each group and extract fit metrics
-    #lm_fits <- data_clean %>%
-    #  group_by(type) %>%
-    #  do({
-    #    lm_model <- lm(as.formula(paste(input$y_var, "~", input$x_var)), data = .)
-    #    summary_lm <- summary(lm_model)
-    #    data.frame(
-    #      group = unique(.$type),
-    #      slope = coef(lm_model)[2],
-    #      intercept = coef(lm_model)[1],
-    #      r_squared = summary_lm$r.squared
-    #    )
-    #  })
-    #
-    ## Add text annotations with fit metrics to the plot
-    #for (i in 1:nrow(lm_fits)) {
-    #  p <- p + annotate("text", 
-    #                    x = 1, y = max(data_clean[[input$y_var]]) * 0.95 - i * 0.1, 
-    #                    label = paste(
-    #                      lm_fits$group[i], 
-    #                      "\nSlope: ", round(lm_fits$slope[i], 2), 
-    #                      "\nIntercept: ", round(lm_fits$intercept[i], 2),
-    #                      "\nR-squared: ", round(lm_fits$r_squared[i], 2)),
-    #                    color = "black", size = 3, hjust = 0)
-    #}
-    
     ggplotly(p)
   })
   
@@ -313,32 +297,6 @@ server <- function(input, output) {
         geom_smooth(method = "lm", aes(group = type_imputed, color = type_imputed), se = TRUE)
     }
     
-    # Fit linear models for each group and extract fit metrics
-    #lm_fits <- texas_data %>%
-    #  group_by(type) %>%
-    #  do({
-    #    lm_model <- lm(as.formula(paste(input$y_var, "~", input$x_var)), data = .)
-    #    summary_lm <- summary(lm_model)
-    #    data.frame(
-    #      group = unique(.$type),
-    #      slope = coef(lm_model)[2],
-    #      intercept = coef(lm_model)[1],
-    #      r_squared = summary_lm$r.squared
-    #    )
-    #  })
-    #
-    ## Add text annotations with fit metrics to the plot
-    #for (i in 1:nrow(lm_fits)) {
-    #  p <- p + annotate("text", 
-    #                    x = 1, y = max(texas_data[[input$y_var]]) * 0.95 - i * 0.1, 
-    #                    label = paste(
-    #                      lm_fits$group[i], 
-    #                      "\nSlope: ", round(lm_fits$slope[i], 2), 
-    #                      "\nIntercept: ", round(lm_fits$intercept[i], 2),
-    #                      "\nR-squared: ", round(lm_fits$r_squared[i], 2)),
-    #                    color = "black", size = 3, hjust = 0)
-    #}
-    
     ggplotly(p)
   })
   
@@ -358,32 +316,6 @@ server <- function(input, output) {
       p <- p + 
         geom_smooth(method = "lm", aes(group = type_imputed, color = type_imputed), se = TRUE)
     }
-    
-    # Fit linear models for each group and extract fit metrics
-    #lm_fits <- california_data %>%
-    #  group_by(type) %>%
-    #  do({
-    #    lm_model <- lm(as.formula(paste(input$y_var, "~", input$x_var)), data = .)
-    #    summary_lm <- summary(lm_model)
-    #    data.frame(
-    #      group = unique(.$type),
-    #      slope = coef(lm_model)[2],
-    #      intercept = coef(lm_model)[1],
-    #      r_squared = summary_lm$r.squared
-    #    )
-    #  })
-    #
-    ## Add text annotations with fit metrics to the plot
-    #for (i in 1:nrow(lm_fits)) {
-    #  p <- p + annotate("text", 
-    #                    x = 1, y = max(california_data[[input$y_var]]) * 0.95 - i * 0.1, 
-    #                    label = paste(
-    #                      lm_fits$group[i], 
-    #                      "\nSlope: ", round(lm_fits$slope[i], 2), 
-    #                      "\nIntercept: ", round(lm_fits$intercept[i], 2),
-    #                      "\nR-squared: ", round(lm_fits$r_squared[i], 2)),
-    #                    color = "black", size = 3, hjust = 0)
-    #}
     
     ggplotly(p)
   })
