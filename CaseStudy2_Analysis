@@ -173,3 +173,85 @@ best_model <- results[which.min(results$MAE), ]
 # Print out the best combination and its MAE
 cat("Best combination of variables:", best_model$Variables, "\n")
 cat("Best MAE:", best_model$MAE, "\n")
+
+
+###---------------Same thing - Naive Bayes loop over every combination and find the lowest MAE by splitting by wine type---------------
+
+library(e1071)     
+library(tidyverse)
+library(caret)     
+library(purrr)     
+
+# Ensure quality is numeric for calculating MAE
+wine_train$quality <- as.integer(wine_train$quality)
+wine_test$quality <- as.integer(wine_test$quality)
+
+
+# Split data into training and testing sets
+set.seed(123)
+split <- 0.8
+train_indices = sample(seq(1, nrow(wine_train)), round(split * nrow(wine_train)))
+wine_train_model <- wine_train[train_indices, ]
+wine_test_model  <- wine_train[-train_indices, ]
+
+
+# Define predictors (removing `type_imputed` or any `type` column)
+predictors <- c("fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides", 
+                "free_sulfur_dioxide", "total_sulfur_dioxide", "density", "pH", "sulphates", "location")
+
+# Function to evaluate a Naive Bayes model and return MAE
+evaluate_nb_model <- function(predictors, wine_train_model, wine_test_model) {
+  # Create the formula dynamically for Naive Bayes model
+  formula <- as.formula(paste("quality ~", paste(predictors, collapse = " + ")))
+  
+  # Train the Naive Bayes model
+  nb_model <- naiveBayes(formula, data = wine_train_model)
+  
+  # Make predictions on the test set
+  nb_pred <- predict(nb_model, newdata = wine_test_model)
+  
+  # Convert predicted factors to numeric (for MAE calculation)
+  nb_pred_numeric <- as.numeric(as.character(nb_pred))
+  
+  # Calculate Mean Absolute Error (MAE)
+  mae <- mean(abs(nb_pred_numeric - wine_test_model$quality))  # MAE calculation
+  
+  return(mae)
+}
+
+# Split the dataset by wine type (Red and White)
+wine_train_red <- wine_train_model %>% filter(type_imputed == "red")
+wine_test_red <- wine_test_model %>% filter(type_imputed == "red")
+
+wine_train_white <- wine_train_model %>% filter(type_imputed == "white")
+wine_test_white <- wine_test_model %>% filter(type_imputed == "white")
+
+# Create all combinations of predictor variables
+all_combinations <- unlist(lapply(1:length(predictors), function(i) combn(predictors, i, simplify = FALSE)), recursive = FALSE)
+
+# Function to evaluate the model for each wine type
+evaluate_for_wine_type <- function(wine_type, wine_train_model, wine_test_model) {
+  results_for_type <- map_dfr(all_combinations, function(combo) {
+    mae <- evaluate_nb_model(combo, wine_train_model, wine_test_model)
+    data.frame(Wine_Type = wine_type, Variables = paste(combo, collapse = ", "), MAE = mae)
+  })
+  return(results_for_type)
+}
+
+# Evaluate for both Red and White wines separately
+results_red <- evaluate_for_wine_type("red", wine_train_red, wine_test_red)
+results_white <- evaluate_for_wine_type("white", wine_train_white, wine_test_white)
+
+# Combine the results for both Red and White wines
+all_results <- bind_rows(results_red, results_white)
+
+# Find the combination with the lowest MAE for each wine type
+best_model_red <- results_red[which.min(results_red$MAE), ]
+best_model_white <- results_white[which.min(results_white$MAE), ]
+
+# Print out the best combinations and their MAEs
+cat("Best combination of variables for Red Wine:", best_model_red$Variables, "\n")
+cat("Best MAE for Red Wine:", best_model_red$MAE, "\n")
+
+cat("Best combination of variables for White Wine:", best_model_white$Variables, "\n")
+cat("Best MAE for White Wine:", best_model_white$MAE, "\n")
