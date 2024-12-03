@@ -266,12 +266,53 @@ cat("Best MAE for White Wine:", best_model_white$MAE, "\n")
 library(e1071)  
 library(caret)
 
-# White wine model
+# Predictors predetermined by previous step
 white_wine_predictors <- c("density", "pH", "sulphates", "location")
 red_wine_predictors <- c("volatile_acidity", "residual_sugar", "chlorides", "total_sulfur_dioxide", "sulphates", "location")
 
+# Make sure they are integers
+wine_train$quality <- as.integer(wine_train$quality)
+wine_test$quality <- as.integer(wine_test$quality)
+
+# Red whine
 wine_train_red <- wine_train %>% filter(type_imputed == "red")
 wine_predict_red <- wine_quality_prediction %>% filter(type_imputed == "red")
 
 wine_train_white <- wine_train %>% filter(type_imputed == "white")
-wine_predict_white <- wine__quality_prediction %>% filter(type_imputed == "white")
+wine_predict_white <- wine_quality_prediction %>% filter(type_imputed == "white")
+
+
+# Check number of rows being predicted
+total_predict_row <- nrow(wine_predict_red) + nrow(wine_predict_white)
+print(total_predict_row)
+
+# Create formula that can be easily updated to feed NB model
+red_formula <- as.formula(paste("quality ~", paste(red_wine_predictors, collapse = " + ")))
+white_formula <- as.formula(paste("quality ~", paste(white_wine_predictors, collapse = " + ")))
+
+# Train both models
+nb_model_red <- naiveBayes(red_formula, data = wine_train_red)
+nb_model_white <- naiveBayes(white_formula, data = wine_train_white)
+
+# Model predictions
+
+## Red
+red_predictions <- predict(nb_model_red, wine_predict_red[, red_wine_predictors])
+red_raw_predictions <- predict(nb_model_red, wine_predict_red[, red_wine_predictors], type="raw")
+
+## White
+white_predictions <- predict(nb_model_white, wine_predict_white[, white_wine_predictors])
+white_raw_predictions <- predict(nb_model_white, wine_predict_white[, white_wine_predictors], type="raw")
+
+# Combine predictions to write back to data frame
+combined_predictions <- c(red_predictions, white_predictions)
+nrow(combined_predictions)
+
+# Add predictions back to the dataset
+wine_quality_prediction$quality <- combined_predictions
+
+print(wine_quality_prediction)
+
+
+# Optionally, save the results to a new file
+#write.csv(wine_quality_prediction, "predicted_results.csv", row.names = FALSE)
