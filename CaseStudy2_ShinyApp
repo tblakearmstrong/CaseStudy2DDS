@@ -64,9 +64,8 @@ wine_full_set$type_imputed <- imputed_type
 #Train stops at ID = 5463
 wine_data <- wine_full_set[1:5463,]
 
-#wine_quality <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Train.csv", header=TRUE)
-#wine_type_location <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Types%20And%20Locations.csv", header = TRUE)
-#wine_data <- merge(wine_quality, wine_type_location, by = "ID")
+
+###---------------------------------------------------------###SHINY APP CODE###---------------------------------------------------------------###
 
 
 # Define UI
@@ -105,7 +104,7 @@ ui <- fluidPage(
       # Input: Number of Bins for Histogram
       sliderInput(
         inputId = "bins", label = "Number of Bins:",
-        min = 1, max = 10, value = 5
+        min = 1, max = 10, value = 7
       ),
       
       # Chart 2 Section Header ----
@@ -195,15 +194,28 @@ server <- function(input, output) {
     if (input$chart_type == "histogram") {
       p <- ggplot(filtered_data(), aes_string(x = plot_column)) +
         geom_histogram(bins = input$bins, fill = "skyblue", color = "black", alpha = 0.7) +
-        labs(title = paste("Histogram of", plot_column, "(All Wines)"), x = plot_column, y = "Frequency")
+        labs(title = paste("Histogram of", plot_column, "(All Wines)"), x = plot_column, y = "Frequency") +
+        facet_wrap(~type_imputed)
     } else {
+      # Calculate the medians by quality
+      median_data <- filtered_data() %>%
+        group_by(quality, type_imputed) %>%
+        summarise(median_value = median(get(plot_column)), .groups = "drop")
+      
+      # Fit a linear model to the medians
+      lm_model <- lm(median_value ~ quality, data = median_data)
+      
+      # Plot boxplot and add the regression line on the medians
       p <- ggplot(filtered_data(), aes_string(x = "quality", y = plot_column)) +
         geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
-        labs(title = paste("Boxplot of", plot_column, "(All Wines)"),x="Quality", y = plot_column) +
-        scale_x_continuous(limits = c(2.5, 9.5), breaks = seq(2, 10, by = 1)) +  # Show quality levels as x-axis labels
+        geom_smooth(data = median_data, aes(x = quality, y = median_value), method = "lm", 
+                    color = "red", size = 1, se = FALSE) +  # Add regression line on the medians
+        labs(title = paste("Boxplot of", plot_column, "(All Wines)"), x = "Quality", y = plot_column) +
+        scale_x_continuous(limits = c(2.5, 9.5), breaks = seq(1, 10, by = 1)) +  # Adjust x-axis
         theme(
-          plot.margin = margin(10, 10, 0, 10)  
-        ) 
+          plot.margin = margin(10, 10, 0, 10)
+        ) +
+        facet_wrap(~type_imputed)
     }
     ggplotly(p)
   })
@@ -216,15 +228,28 @@ server <- function(input, output) {
     if (input$chart_type == "histogram") {
       p <- ggplot(texas_data, aes_string(x = plot_column)) +
         geom_histogram(bins = input$bins, fill = "skyblue", color = "black", alpha = 0.7) +
-        labs(title = paste("Histogram of", plot_column, "(Texas Wines)"), x = plot_column, y = "Frequency")
+        labs(title = paste("Histogram of", plot_column, "(Texas Wines)"), x = plot_column, y = "Frequency") +
+        facet_wrap(~type_imputed)
     } else {
-      p <- ggplot(filtered_data(), aes_string(x = "quality", y = plot_column)) +
+      # Calculate the medians by quality
+      median_data <- texas_data %>%
+        group_by(quality, type_imputed) %>%
+        summarise(median_value = median(get(plot_column)), .groups = "drop")
+      
+      # Fit a linear model to the medians
+      lm_model <- lm(median_value ~ quality, data = median_data)
+      
+      # Plot boxplot and add the regression line on the medians
+      p <- ggplot(texas_data, aes_string(x = "quality", y = plot_column)) +
         geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
-        labs(title = paste("Boxplot of", plot_column, "(All Wines)"),x="Quality", y = plot_column) +
-        scale_x_continuous(limits = c(2.5, 9.5), breaks = seq(1, 10, by = 1)) +  # Show quality levels as x-axis labels
+        geom_smooth(data = median_data, aes(x = quality, y = median_value), method = "lm", 
+                    color = "red", size = 1, se = FALSE) +  # Add regression line on the medians
+        labs(title = paste("Boxplot of", plot_column, "(All Wines)"), x = "Quality", y = plot_column) +
+        scale_x_continuous(limits = c(2.5, 9.5), breaks = seq(1, 10, by = 1)) +  # Adjust x-axis
         theme(
-          plot.margin = margin(10, 10, 0, 10)  
-        )
+          plot.margin = margin(10, 10, 0, 10)
+        ) +
+        facet_wrap(~type_imputed)
     }
     ggplotly(p)
   })
@@ -237,11 +262,12 @@ server <- function(input, output) {
     if (input$chart_type == "histogram") {
       p <- ggplot(california_data, aes_string(x = plot_column)) +
         geom_histogram(bins = input$bins, fill = "skyblue", color = "black", alpha = 0.7) +
-        labs(title = paste("Histogram of", plot_column, "(California Wines)"), x = plot_column, y = "Frequency")
+        labs(title = paste("Histogram of", plot_column, "(California Wines)"), x = plot_column, y = "Frequency") +
+        facet_wrap(~type_imputed)
     } else {
       # Calculate the medians by quality
       median_data <- california_data %>%
-        group_by(quality) %>%
+        group_by(quality, type_imputed) %>%
         summarise(median_value = median(get(plot_column)), .groups = "drop")
       
       # Fit a linear model to the medians
@@ -256,7 +282,8 @@ server <- function(input, output) {
         scale_x_continuous(limits = c(2.5, 9.5), breaks = seq(1, 10, by = 1)) +  # Adjust x-axis
         theme(
           plot.margin = margin(10, 10, 0, 10)
-        )
+        ) +
+        facet_wrap(~type_imputed)
     }
     ggplotly(p)
   })
