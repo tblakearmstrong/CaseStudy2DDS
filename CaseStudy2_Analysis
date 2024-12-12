@@ -257,7 +257,7 @@ cat("Best combination of variables for White Wine:", best_model_white$Variables,
 cat("Best MAE for White Wine:", best_model_white$MAE, "\n")
 
 #For white wine: density, pH, sulphates, location
-#For red wine: volatile_acidity, residual_sugar, chlorides, total_sulfur_dioxide, sulphates, location
+#For red wine: volatile_acidity, residual_sugar, citric_acid chlorides, total_sulfur_dioxide, sulphates, location
 
 
 
