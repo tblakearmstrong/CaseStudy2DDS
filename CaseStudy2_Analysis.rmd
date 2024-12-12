@@ -2,7 +2,7 @@
 title: "Wine Quality Analysis"
 author: "Zainab Anwar & Blake Armstrong"
 date: "2024-12-11"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
