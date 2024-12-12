@@ -38,7 +38,6 @@ wine_type_location <- wine_type_location %>%
 
 # Merge total raw dataset with the type and location
 wine_full_set <- merge(wine_total_raw, wine_type_location, by = "ID")
-str(wine_train)
 
 # Plot missing variables using naniar package
 gg_miss_var(wine_full_set)
@@ -57,7 +56,7 @@ wine_type_impute <- wine_full_set %>%
 str(wine_type_impute)
 
 ####Try to rotate labels so that it is readable####
-md.pattern(wine_type_impute) # Matches 175 to what was calculated above...
+md.pattern(wine_type_impute, rotate.names = TRUE, plot = FALSE) # Matches 175 to what was calculated above...
 
 
 # Making sure type is a factor
@@ -65,14 +64,14 @@ wine_type_impute$type <- as.factor(wine_type_impute$type)
 
 
 # Perform imputation using mice with logistic regression (logreg) for the 'type' column
-imputed_data <- mice(wine_type_impute, method = "logreg", m = 5)
+imputed_data <- mice(wine_type_impute, method = "logreg", m = 5, printFlag = FALSE)
 
 
 # Setup dataframe to be able to plot histogram by type
 mice_imputed <- data.frame(
   original = wine_full_set$type,  # The original type column
   imputed_logreg = complete(imputed_data, action = 1)$type  # First imputation (logreg)
-  )
+)
 
 
 h1 <- ggplot(mice_imputed, aes(x = original)) +
@@ -113,7 +112,6 @@ str(wine_train)
 
 #Test starts at ID = 5464 until the end
 wine_quality_prediction <- wine_full_set[5464:nrow(wine_full_set),]
-str(wine_test)
 
 
 ###-------------------------------------------------------BUILD MODEL--------------------------------------------------------------------------------###
@@ -123,21 +121,21 @@ library(e1071)
 library(tidyverse)
 library(caret)     
 library(purrr)     
-  
+
 # Split data into training and testing sets
 set.seed(123)
 split <- 0.8
 train_indices = sample(seq(1, nrow(wine_train)), round(split * nrow(wine_train)))
 wine_train_model <- wine_train[train_indices, ]
 wine_test_model  <- wine_train[-train_indices, ]
-  
-  # Ensure quality is numeric for calculating MAE
+
+# Ensure quality is numeric for calculating MAE
 wine_train_model$quality <- as.integer(wine_train_model$quality)
-  
+
 # Define predictors
 predictors <- c("fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides", 
                 "free_sulfur_dioxide", "total_sulfur_dioxide", "density", "pH", "sulphates", "type_imputed", "location")
-  
+
 # Function to evaluate a Naive Bayes model and return MAE
 evaluate_nb_model <- function(predictors, wine_train_model, wine_test_model) {
   # Create the formula dynamically for Naive Bayes model
@@ -157,19 +155,19 @@ evaluate_nb_model <- function(predictors, wine_train_model, wine_test_model) {
   
   return(mae)
 }
-  
+
 # Create all combinations of predictor variables
 all_combinations <- unlist(lapply(1:length(predictors), function(i) combn(predictors, i, simplify = FALSE)), recursive = FALSE)
-  
+
 # Loop over all combinations and evaluate each model
 results <- map_dfr(all_combinations, function(combo) {
   mae <- evaluate_nb_model(combo, wine_train_model, wine_test_model)
   data.frame(Variables = paste(combo, collapse = ", "), MAE = mae)
 })
-  
+
 # Find the combination with the lowest MAE
 best_model <- results[which.min(results$MAE), ]
-  
+
 # Print out the best combination and its MAE
 cat("Best combination of variables:", best_model$Variables, "\n")
 cat("Best MAE:", best_model$MAE, "\n")
@@ -181,10 +179,6 @@ library(e1071)
 library(tidyverse)
 library(caret)     
 library(purrr)     
-
-# Ensure quality is numeric for calculating MAE
-wine_train$quality <- as.integer(wine_train$quality)
-wine_test$quality <- as.integer(wine_test$quality)
 
 
 # Split data into training and testing sets
@@ -257,7 +251,7 @@ cat("Best combination of variables for White Wine:", best_model_white$Variables,
 cat("Best MAE for White Wine:", best_model_white$MAE, "\n")
 
 #For white wine: density, pH, sulphates, location
-#For red wine: volatile_acidity, residual_sugar, citric_acid chlorides, total_sulfur_dioxide, sulphates, location
+#For red wine: volatile_acidity, residual_sugar, chlorides, total_sulfur_dioxide, sulphates, location
 
 
 
@@ -269,10 +263,6 @@ library(caret)
 # Predictors predetermined by previous step
 white_wine_predictors <- c("density", "pH", "sulphates", "location")
 red_wine_predictors <- c("volatile_acidity", "residual_sugar", "chlorides", "total_sulfur_dioxide", "sulphates", "location")
-
-# Make sure they are integers
-wine_train$quality <- as.integer(wine_train$quality)
-wine_test$quality <- as.integer(wine_test$quality)
 
 # Red whine
 wine_train_red <- wine_train %>% filter(type_imputed == "red")
@@ -315,4 +305,4 @@ print(wine_quality_prediction)
 
 
 # Optionally, save the results to a new file
-#write.csv(wine_quality_prediction, "predicted_results.csv", row.names = FALSE)
+write.csv(wine_quality_prediction, "predicted_results.csv", row.names = FALSE)
