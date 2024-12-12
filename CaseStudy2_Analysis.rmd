@@ -1,0 +1,396 @@
+---
+title: "Wine Quality Analysis"
+author: "Zainab Anwar & Blake Armstrong"
+date: "2024-12-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##### <u>R ShinyApp Link:</u> https://barms.shinyapps.io/DDS_CaseStudy2/
+
+This is an R Markdown document that contains the primary output(s) of analysis performed on the Wine Quality dataset. 
+
+This project focuses on predicting the quality of wines using various physicochemical attributes. The goal is to build a predictive model capable of predicting wine quality based on features such as acidity, alcohol content, sugar levels, pH, and other chemical characteristics. The dataset used for this analysis consists of red and white wine samples, with each sample labeled with a quality score ranging from 0 to 10.
+
+The project involves several key steps:
+
+**1. Data Exploration and Preprocessing:** Initial analysis to understand the structure of the dataset, handle missing values (logistic regression), and scale the data for better model performance.
+
+**2. Feature Engineering:** Identifying relevant features that contribute to wine quality prediction and transforming the data to enhance the model’s accuracy.
+
+**3. Model Building:** Several prediction algorithms (e.g., linear regression, naive Bayes) were tested to determine the best approach for predicting wine quality.
+
+**4. Model Evaluation:** The performance of each model was assessed using the lowest Mean Absolute Error (MAE) metric. Cross-validation techniques were also employed to ensure robustness.
+
+**5. Results and Conclusion:** The final model was selected based on its ability to generalize well to unseen data. Insights were drawn from the feature importance analysis, providing a better understanding of which factors most influence wine quality.
+
+Ultimately, this project demonstrates the potential of using prediction techniques to predict wine quality, offering valuable insights for both winemakers and consumers in understanding what characteristics contribute to higher-quality wines.
+
+
+```{r dataload, echo = FALSE, include=FALSE, warning= FALSE, message = FALSE}
+library(dplyr, quietly = TRUE)
+library(ggplot2, quietly = TRUE)
+library(lubridate, quietly = TRUE)
+library(naniar, quietly = TRUE)
+library(caret, quietly = TRUE)
+library(e1071, quietly = TRUE)
+
+###-----------------------------------------------------------###LOAD AND CLEAN###-------------------------------------------------------------------###
+# Load the test dataset
+wine_prediction_raw <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Test%20Set.csv", header = TRUE)
+wine_prediction_raw$quality <- NA_integer_ #Add the column so we can rbind later to make a full dataset
+
+# Load the train dataset
+wine_train_raw <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Train.csv", header=TRUE)
+
+# rbind datasets to impute later
+wine_total_raw <- rbind(wine_train_raw, wine_prediction_raw)
+
+# Load the locations/type of all wines (with missing values, need to impute)
+wine_type_location <- read.csv("https://raw.githubusercontent.com/tblakearmstrong/CaseStudy2DDS/refs/heads/main/RawFiles/Wine%20Types%20And%20Locations.csv", header = TRUE)
+
+# Look at missing values
+missing_type_location <- tibble(
+  missing_type = sum(wine_type_location$type==""),
+  missing_location = sum(wine_type_location$location==""))
+#print(missing_type_location)
+
+# Fix the missing values in wine_type_location before merging with other datasets going from "" to NA
+wine_type_location <- wine_type_location %>% 
+  mutate(type=ifelse(type=="",NA,type))
+
+
+# Merge total raw dataset with the type and location
+wine_full_set <- merge(wine_total_raw, wine_type_location, by = "ID")
+
+
+# Plot missing variables using naniar package
+gg_miss_var(wine_full_set)
+
+```
+
+
+```{r mice, echo=FALSE, include = FALSE, warning = FALSE, message = FALSE}
+###-----------------------------------------------------###FIX MISSING "type" VALUES###---------------------------------------------------------------###
+### Impute missing wine types using the mice package
+
+library(minqa, quietly = TRUE)
+library(mice, quietly = TRUE)
+library(gridExtra, quietly = TRUE)
+
+# Setting dataframe to impute 
+wine_type_impute <- wine_full_set %>% 
+  select(fixed_acidity, volatile_acidity, residual_sugar, chlorides, free_sulfur_dioxide, total_sulfur_dioxide, density, pH, sulphates, alcohol, type, location)
+
+####Try to rotate labels so that it is readable####
+md.pattern(wine_type_impute, rotate.names = TRUE, plot = FALSE) # Matches 175 to what was calculated above...
+```
+
+```{r impute type, echo=FALSE, warning = FALSE, message = FALSE}
+# Making sure type is a factor
+wine_type_impute$type <- as.factor(wine_type_impute$type)
+
+# Perform imputation using mice with logistic regression (logreg) for the 'type' column
+imputed_data <- mice(wine_type_impute, method = "logreg", m = 5, printFlag= FALSE)
+
+```
+
+#### Step 1: Data Exploration and Preprocessing:
+
+##### **Imputed Wine Type Pre/Post Imputation**
+```{r mice graphs, echo = FALSE, warning = FALSE, message = FALSE}
+# Setup dataframe to be able to plot histogram by type
+mice_imputed <- data.frame(
+  original = wine_full_set$type,  # The original type column
+  imputed_logreg = complete(imputed_data, action = 1)$type  # First imputation (logreg)
+  )
+
+
+h1 <- ggplot(mice_imputed, aes(x = original)) +
+  geom_bar(fill = "#ad1538", color = "#000000", position = "identity") +
+  ggtitle("Original Distribution") +
+  theme_classic() +
+  scale_x_discrete(labels = c("Red", "White"))+
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5, color = "black")+
+  scale_y_continuous(limits = c(0, 5500))
+
+h2 <- ggplot(mice_imputed, aes(x = imputed_logreg)) +
+  geom_bar(fill = "#15ad4f", color = "#000000", position = "identity") +
+  ggtitle("Logistic Regression Imputed Distribution") +
+  theme_classic() +
+  scale_x_discrete(labels = c("Red", "White"))+
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5, color = "black") +
+  scale_y_continuous(limits = c(0, 5500))
+
+# Combine plots into a grid for easy comparison
+grid.arrange(h1, h2, nrow = 2)
+
+
+
+
+# Extract the first imputation (action = 1) for the 'type' column from the imputed data
+imputed_type <- complete(imputed_data, action = 1)$type
+
+# Add the imputed 'type' column back into the original wine_full_set dataframe
+wine_full_set$type_imputed <- imputed_type
+
+```
+##### Noted that we are missing and imputed 175 wine type rows using logistic regression
+
+
+##### **Missing Observations Table**
+```{r imputed missing values, echo = FALSE}
+# Make sure everything is populated that is supposed to be at this step...
+gg_miss_var(wine_full_set)
+
+# Split back out into the original train and test sets
+#Train stops at ID = 5463
+wine_train <- wine_full_set[1:5463,]
+
+#Test starts at ID = 5464 until the end
+wine_quality_prediction <- wine_full_set[5464:nrow(wine_full_set),]
+
+
+```
+
+### Steps 2-4 are combined in the same blocks
+#### Step 2: Feature Engineering: Loop over every possible combination of variables to identify what the resulting lowest MAE is.
+#### Step 3: The Naive Bayes model is used to estimate wine quality of our 80/20 train/test split.
+#### Step 4: The MAE is the ultimate parameter to find the lowest, and determines the variables we use from Step 2.
+
+### **Initial Model Results: Combined Model**
+```{r combined model and MAE, echo = FALSE, warning = FALSE, message = FALSE}
+library(e1071, quiet= TRUE)     
+library(tidyverse, quiet= TRUE)
+library(caret, quiet= TRUE)     
+library(purrr, quiet= TRUE)     
+  
+# Split data into training and testing sets
+set.seed(123)
+split <- 0.8
+train_indices = sample(seq(1, nrow(wine_train)), round(split * nrow(wine_train)))
+wine_train_model <- wine_train[train_indices, ]
+wine_test_model  <- wine_train[-train_indices, ]
+  
+  # Ensure quality is numeric for calculating MAE
+wine_train_model$quality <- as.integer(wine_train_model$quality)
+  
+# Define predictors
+predictors <- c("fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides", 
+                "free_sulfur_dioxide", "total_sulfur_dioxide", "density", "pH", "sulphates", "type_imputed", "location")
+  
+# Function to evaluate a Naive Bayes model and return MAE
+evaluate_nb_model <- function(predictors, wine_train_model, wine_test_model) {
+  # Create the formula dynamically for Naive Bayes model
+  formula <- as.formula(paste("quality ~", paste(predictors, collapse = " + ")))
+  
+  # Train the Naive Bayes model
+  nb_model <- naiveBayes(formula, data = wine_train_model)
+  
+  # Make predictions on the test set
+  nb_pred <- predict(nb_model, newdata = wine_test_model)
+  
+  # Convert predicted factors to numeric (for MAE calculation)
+  nb_pred_numeric <- as.numeric(as.character(nb_pred))
+  
+  # Calculate Mean Absolute Error (MAE)
+  mae <- mean(abs(nb_pred_numeric - wine_test_model$quality))  # MAE calculation
+  
+  return(mae)
+}
+  
+# Create all combinations of predictor variables
+all_combinations <- unlist(lapply(1:length(predictors), function(i) combn(predictors, i, simplify = FALSE)), recursive = FALSE)
+  
+# Loop over all combinations and evaluate each model
+results <- map_dfr(all_combinations, function(combo) {
+  mae <- evaluate_nb_model(combo, wine_train_model, wine_test_model)
+  data.frame(Variables = paste(combo, collapse = ", "), MAE = mae)
+})
+  
+# Find the combination with the lowest MAE
+best_model <- results[which.min(results$MAE), ]
+```
+
+```{r combined model output, echo= FALSE}
+# Print out the best combination and its MAE
+cat("Best combination of variables:", best_model$Variables, "\n")
+cat("Best MAE:", best_model$MAE, "\n")
+```
+
+
+
+
+### **Model Results:  Split out by Wine Type**
+```{r Model Split by Wine Type, echo = FALSE, warning = FALSE, message=FALSE}
+###-- Naive Bayes loop over every combination and find the lowest MAE by splitting by wine type
+
+library(e1071, quietly = TRUE)     
+library(tidyverse, quietly = TRUE)
+library(caret, quietly = TRUE)     
+library(purrr, quietly = TRUE)     
+
+# Split data into training and testing sets
+set.seed(123)
+split <- 0.8
+train_indices = sample(seq(1, nrow(wine_train)), round(split * nrow(wine_train)))
+wine_train_model <- wine_train[train_indices, ]
+wine_test_model  <- wine_train[-train_indices, ]
+
+
+# Define predictors (removing `type_imputed` or any `type` column)
+predictors <- c("fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides", 
+                "free_sulfur_dioxide", "total_sulfur_dioxide", "density", "pH", "sulphates", "location")
+
+# Function to evaluate a Naive Bayes model and return MAE
+evaluate_nb_model <- function(predictors, wine_train_model, wine_test_model) {
+  # Create the formula dynamically for Naive Bayes model
+  formula <- as.formula(paste("quality ~", paste(predictors, collapse = " + ")))
+  
+  # Train the Naive Bayes model
+  nb_model <- naiveBayes(formula, data = wine_train_model)
+  
+  # Make predictions on the test set
+  nb_pred <- predict(nb_model, newdata = wine_test_model)
+  
+  # Convert predicted factors to numeric (for MAE calculation)
+  nb_pred_numeric <- as.numeric(as.character(nb_pred))
+  
+  # Calculate Mean Absolute Error (MAE)
+  mae <- mean(abs(nb_pred_numeric - wine_test_model$quality))  # MAE calculation
+  
+  # Confusion Matrix
+  #cm <- confusionMatrix(nb_pred, wine_test_model$quality)
+  
+  return(mae)
+}
+
+# Split the dataset by wine type (Red and White)
+wine_train_red <- wine_train_model %>% filter(type_imputed == "red")
+wine_test_red <- wine_test_model %>% filter(type_imputed == "red")
+
+wine_train_white <- wine_train_model %>% filter(type_imputed == "white")
+wine_test_white <- wine_test_model %>% filter(type_imputed == "white")
+
+# Create all combinations of predictor variables
+all_combinations <- unlist(lapply(1:length(predictors), function(i) combn(predictors, i, simplify = FALSE)), recursive = FALSE)
+
+# Function to evaluate the model for each wine type
+evaluate_for_wine_type <- function(wine_type, wine_train_model, wine_test_model) {
+  results_for_type <- map_dfr(all_combinations, function(combo) {
+    mae <- evaluate_nb_model(combo, wine_train_model, wine_test_model)
+    data.frame(Wine_Type = wine_type, Variables = paste(combo, collapse = ", "), MAE = mae)
+  })
+  return(results_for_type)
+}
+
+# Evaluate for both Red and White wines separately
+results_red <- evaluate_for_wine_type("red", wine_train_red, wine_test_red)
+results_white <- evaluate_for_wine_type("white", wine_train_white, wine_test_white)
+
+# Combine the results for both Red and White wines
+all_results <- bind_rows(results_red, results_white)
+
+# Find the combination with the lowest MAE for each wine type
+best_model_red <- results_red[which.min(results_red$MAE), ]
+best_model_white <- results_white[which.min(results_white$MAE), ]
+```
+
+
+#### Best Variable Prediction Combination and MAE for Red Wine
+```{r best red wine variables, echo = FALSE}
+# Print out the best combinations and their MAEs
+cat("Best combination of variables for Red Wine:", best_model_red$Variables, "\n")
+cat("Best MAE for Red Wine:", best_model_red$MAE, "\n")
+```
+
+
+#### Best Variable Prediction Combination and MAE for Red Wine
+```{r best white wine variables, echo = FALSE}
+cat("Best combination of variables for White Wine:", best_model_white$Variables, "\n")
+cat("Best MAE for White Wine:", best_model_white$MAE, "\n")
+```
+
+#### Combined Lowest MAE for the Train Data
+```{r combined mae, echo=FALSE}
+#### Combined Weighted MAE
+combined_mae <- ((as.numeric(table(wine_train$type_imputed)["red"]) * best_model_red$MAE) + 
+                 (as.numeric(table(wine_train$type_imputed)["white"]) * best_model_white$MAE)) /
+                sum(table(wine_train$type_imputed))
+
+cat("The resulting combined MAE:", combined_mae)
+#For white wine: density, pH, sulphates, location
+#For red wine: volatile_acidity, residual_sugar, chlorides, total_sulfur_dioxide, sulphates, location
+```
+
+
+### Step 5: Select the split model since we are able to be more accurate and through the shiny app, we are able to tell that red and white wine quality predictors are different.  Then apply the model to the test set and predict the quality of remaining wines.
+
+
+```{r Prediction Ouput, echo=FALSE}
+
+###-----------------------------------------Apply Train set model to Test Set-----------------------------------------------------------
+
+library(e1071, quietly = TRUE)  
+library(caret, quietly = TRUE)
+
+# Predictors predetermined by previous step
+white_wine_predictors <- c("density", "pH", "sulphates", "location")
+red_wine_predictors <- c("volatile_acidity", "residual_sugar", "chlorides", "total_sulfur_dioxide", "sulphates", "location")
+
+# Red whine
+wine_train_red <- wine_train %>% filter(type_imputed == "red")
+wine_predict_red <- wine_quality_prediction %>% filter(type_imputed == "red")
+
+wine_train_white <- wine_train %>% filter(type_imputed == "white")
+wine_predict_white <- wine_quality_prediction %>% filter(type_imputed == "white")
+```
+
+
+
+##### **Number of Wines to predict Quality**
+```{r number of quality guesses, echo = FALSE}
+# Check number of rows being predicted
+total_predict_row <- nrow(wine_predict_red) + nrow(wine_predict_white)
+print(total_predict_row)
+```
+
+
+#### **Table of Predicted Wine Quality**
+```{r final prediciton, echo = FALSE}
+library(knitr, quietly = TRUE)
+# Create formula that can be easily updated to feed NB model
+red_formula <- as.formula(paste("quality ~", paste(red_wine_predictors, collapse = " + ")))
+white_formula <- as.formula(paste("quality ~", paste(white_wine_predictors, collapse = " + ")))
+
+# Train both models
+nb_model_red <- naiveBayes(red_formula, data = wine_train_red)
+nb_model_white <- naiveBayes(white_formula, data = wine_train_white)
+
+# Model predictions
+
+## Red
+red_predictions <- predict(nb_model_red, wine_predict_red[, red_wine_predictors])
+red_raw_predictions <- predict(nb_model_red, wine_predict_red[, red_wine_predictors], type="raw")
+
+## White
+white_predictions <- predict(nb_model_white, wine_predict_white[, white_wine_predictors])
+white_raw_predictions <- predict(nb_model_white, wine_predict_white[, white_wine_predictors], type="raw")
+
+# Combine predictions to write back to data frame
+combined_predictions <- c(red_predictions, white_predictions)
+#nrow(combined_predictions)
+
+# Add predictions back to the dataset
+wine_quality_prediction$quality <- combined_predictions
+
+kable(wine_quality_prediction[1:20,])
+
+
+# Optionally, save the results to a new file
+#write.csv(wine_quality_prediction, "predicted_results.csv", row.names = FALSE)
+
+```
