@@ -138,6 +138,8 @@ imputed_type <- complete(imputed_data, action = 1)$type
 wine_full_set$type_imputed <- imputed_type
 
 ```
+
+
 ##### Noted that we are missing and imputed 175 wine type rows using logistic regression
 
 
@@ -351,7 +353,7 @@ wine_predict_white <- wine_quality_prediction %>% filter(type_imputed == "white"
 
 
 
-##### **Number of Wines to predict Quality**
+#### **Number of Wines to predict Quality**
 ```{r number of quality guesses, echo = FALSE}
 # Check number of rows being predicted
 total_predict_row <- nrow(wine_predict_red) + nrow(wine_predict_white)
