@@ -8,3 +8,10 @@ The primary objective is to develop a robust predictive model that accurately fo
 
 ## Objective 2
 Beyond prediction, this project aims to delve into the dataset to identify the key determinants of high-quality wine. By analyzing the relationships between various chemical properties and wine quality, we can provide valuable insights to vintners, potentially leading to improvements in wine production.
+
+# Folders/Files
+## ExtraFiles
+This folder has some extra code that we ended up scraping due to the results/requirements
+
+## RawFiles
+This folder contains the data files that were provided to us
