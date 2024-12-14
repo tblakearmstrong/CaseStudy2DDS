@@ -1,6 +1,8 @@
 # CaseStudy2DDS
 DDS Wine Quality Group Project<br/>
-Zainab Anwar &amp; Blake Armstrong
+Zainab Anwar &amp; Blake Armstrong<br/>
+Check out the YouTube video for our analysis here: https://youtu.be/AoVrR3_DEDY
+
 
 # About the Project
 ## Objective 1
