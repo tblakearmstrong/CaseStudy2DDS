@@ -2,6 +2,7 @@
 DDS Wine Quality Group Project<br/>
 Zainab Anwar &amp; Blake Armstrong<br/>
 Check out the YouTube video for our analysis here: https://youtu.be/AoVrR3_DEDY
+Check out the Shiny App for our analysis here: https://barms.shinyapps.io/DDS_CaseStudy2/
 
 
 # About the Project
